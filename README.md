@@ -17,7 +17,7 @@ However, we experience the same behaviour when we use the latest and greatest of
 * commons-pool2 2.12.0
 
 
-## Repro steps
+## Oozie-like repro steps
 
 ### Environment
 
@@ -27,14 +27,24 @@ You will need Java 8, Apache Maven 3.6 and Docker.
 
 Create a PostgreSQL database using this Docker command
 
-```bash
-docker run -d
+```shell
+docker run -d \
 --name repro-psql \
 --hostname repro-psql \
 -e "POSTGRES_USER=repro" \
 -e "POSTGRES_PASSWORD=repro" \
 -e "POSTGRES_DB=repro" \
 -p "5433:5432" postgres:12.17-bullseye
+```
+or a MySQL one
+```shell
+docker run -d \
+--name repro-mysql \
+-e MYSQL_ROOT_PASSWORD=repro \
+-e MYSQL_DATABASE=repro \
+-e MYSQL_USER=repro \
+-e MYSQL_PASSWORD=repro \
+-p "3307:3306" -d mysql:latest
 ```
 
 And then create the necessary bean table
@@ -57,11 +67,13 @@ docker exec repro-psql /usr/bin/psql \
 If you want to use OpenJPA2 and commons-pool, commons-dbcp:
 ```shell
 mvn clean install -Popenjpa2,\!openjpa3
+mvn -Popenjpa2,\!openjpa3 exec:java@repro
 ```
 
 If you want to use OpenJPA3 and commons-pool2, commons-dbcp2:
 ```shell
 mvn clean install -P\!openjpa2,openjpa3
+mvn -P\!openjpa2,openjpa3 exec:java@repro
 ```
 
 ### Kill the connections from the Database
@@ -125,3 +137,31 @@ If you create a `jstack` you will see hanging threads like
 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
 	at java.lang.Thread.run(Thread.java:750)
 ~~~
+
+If you want to make the program get stuck sooner,
+then turn off the connection validation.
+
+## DBCP-based repro steps
+
+### Environment
+
+See [Oozie-like repro steps](#environment)
+
+### PostgreSQL databse
+
+See [Oozie-like repro steps](#postgresql-databse)
+
+### Execute this repro program
+
+Use OpenJPA3 and commons-pool2, commons-dbcp2:
+```shell
+mvn clean install -P\!openjpa2,openjpa3
+mvn -P\!openjpa2,openjpa3 exec:java@repro-one-thread
+```
+
+When the program waits to press Enter...,
+kill the DB connections ONE time as described in [Kill the connections from the Database](#kill-the-connections-from-the-database).
+Then press Enter.
+
+Repeat the connection closure and Enter #-of-pool-size times to make the program stuck.
+then check `jstack`.
